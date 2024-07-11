@@ -1,0 +1,19 @@
+<!-- yourapp/templates/upgrade_plan.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upgrade Plan</title>
+</head>
+<body>
+    <h1>Upgrade Your Plan</h1>
+    <p>Here you can upgrade your subscription plan.</p>
+    <form method="post">
+        {% csrf_token %}
+        <!-- Include form fields for upgrading plan -->
+        <button type="submit">Upgrade Plan</button>
+    </form>
+    <a href="{% url 'chat_dashboard' %}">Back to Dashboard</a>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!-- Settings Page -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings - Chat Dashboard</title>
+    <!-- Include your CSS and JS files here -->
+</head>
+<body>
+    <h1>Settings</h1>
+    
+    <!-- Document Upload Section -->
+    <form action="{% url 'upload_document' %}" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="file" name="file">
+        <button type="submit">Upload Document</button>
+    </form>
+    
+    <!-- Folder Creation Section -->
+    <form action="{% url 'create_folder' %}" method="post">
+        {% csrf_token %}
+        <input type="text" name="name" placeholder="Folder Name">
+        <button type="submit">Create Folder</button>
+    </form>
+
+    <!-- Include your JavaScript at the end -->
+</body>
+</html>

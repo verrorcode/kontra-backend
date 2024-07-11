@@ -1,0 +1,83 @@
+<!-- yourapp/templates/chat_dashboard.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Dashboard</title>
+    <!-- Add your CSS styles here -->
+    <style>
+        /* Example styles, adjust as needed */
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .chat-messages {
+            overflow-y: scroll;
+            max-height: 300px;
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .chat-input {
+            width: calc(100% - 80px); /* Adjust width to fit your layout */
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .chat-submit {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .settings-button {
+            display: inline-block;
+            padding: 10px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            margin-top: 10px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h1>Chat Dashboard</h1>
+        <div class="chat-messages" id="chat-messages">
+            <!-- Chat messages will be displayed here -->
+            <p>Welcome to the chat!</p>
+        </div>
+        <textarea class="chat-input" id="chat-input" rows="3" placeholder="Type your message..."></textarea>
+        <button class="chat-submit" onclick="sendMessage()">Send</button>
+        <a href="{% url 'upgrade_plan' %}" class="settings-button">Upgrade Plan</a>
+        <a href="{% url 'account_logout' %}" class="settings-button">Logout</a>
+        <a href="{% url 'settings' %}" class="settings-button">Settings</a> <!-- Added button for settings -->
+    </div>
+
+    <!-- Include your JavaScript for chat functionality -->
+    <script>
+        function sendMessage() {
+            var messageInput = document.getElementById('chat-input').value;
+            if (messageInput.trim() !== '') {
+                var chatMessages = document.getElementById('chat-messages');
+                var newMessage = document.createElement('p');
+                newMessage.textContent = messageInput;
+                chatMessages.appendChild(newMessage);
+                document.getElementById('chat-input').value = '';
+            }
+        }
+    </script>
+</body>
+</html>
