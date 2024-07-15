@@ -1,28 +1,60 @@
-<!-- Settings Page -->
+<!-- templates/settings.html -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Settings - Chat Dashboard</title>
-    <!-- Include your CSS and JS files here -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
 </head>
 <body>
-    <h1>Settings</h1>
-    
-    <!-- Document Upload Section -->
-    <form action="{% url 'upload_document' %}" method="post" enctype="multipart/form-data">
+    <h2>Settings</h2>
+    <form action="{% url 'upload_document' %}" method="POST" enctype="multipart/form-data">
         {% csrf_token %}
-        <input type="file" name="file">
-        <button type="submit">Upload Document</button>
+        <label for="document">Upload Document:</label>
+        <input type="file" name="document" required>
+        <label for="folder">Folder:</label>
+        <select name="folder_id">
+            <option value="">None</option>
+            {% for folder in folders %}
+                <option value="{{ folder.id }}">{{ folder.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Upload</button>
     </form>
-    
-    <!-- Folder Creation Section -->
-    <form action="{% url 'create_folder' %}" method="post">
+    <br>
+    <form action="{% url 'create_folder' %}" method="POST">
         {% csrf_token %}
-        <input type="text" name="name" placeholder="Folder Name">
-        <button type="submit">Create Folder</button>
+        <label for="folder_name">Create Folder:</label>
+        <input type="text" name="folder_name" required>
+        <button type="submit">Create</button>
     </form>
-
-    <!-- Include your JavaScript at the end -->
+    <br>
+    <h3>Documents</h3>
+    <ul>
+        {% for document in documents %}
+            <li>
+                {{ document.file.name }}
+                <form action="{% url 'delete_document' document.id %}" method="POST" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit">Delete</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+    <h3>Folders</h3>
+    <ul>
+        {% for folder in folders %}
+            <li>
+                {{ folder.name }}
+                <form action="{% url 'delete_folder' folder.id %}" method="POST" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit">Delete</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+    <br>
+    <button onclick="location.href='{% url 'chat_dashboard' %}'">Back to Chat</button>
 </body>
 </html>

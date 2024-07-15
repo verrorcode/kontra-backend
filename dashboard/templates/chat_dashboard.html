@@ -1,83 +1,60 @@
-<!-- yourapp/templates/chat_dashboard.html -->
+<!-- templates/chat_dashboard.html -->
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Dashboard</title>
-    <!-- Add your CSS styles here -->
     <style>
-        /* Example styles, adjust as needed */
         .chat-container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .messages {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        .input-area {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+        .input-area input {
+            flex-grow: 1;
+            padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-        .chat-messages {
-            overflow-y: scroll;
-            max-height: 300px;
-            border: 1px solid #eee;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        .chat-input {
-            width: calc(100% - 80px); /* Adjust width to fit your layout */
-            padding: 10px;
-            margin-top: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        .chat-submit {
-            margin-top: 10px;
-            padding: 10px;
+        .input-area button {
+            margin-left: 10px;
+            padding: 10px 20px;
+            border: none;
             background-color: #007bff;
-            color: #fff;
-            border: none;
+            color: white;
             border-radius: 5px;
-            cursor: pointer;
-        }
-        .settings-button {
-            display: inline-block;
-            padding: 10px;
-            background-color: #28a745;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            margin-top: 10px;
-            cursor: pointer;
-            text-decoration: none;
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
-        <h1>Chat Dashboard</h1>
-        <div class="chat-messages" id="chat-messages">
-            <!-- Chat messages will be displayed here -->
-            <p>Welcome to the chat!</p>
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message">
+                    <strong>{{ message.role }}:</strong> {{ message.message }}
+                </div>
+            {% endfor %}
         </div>
-        <textarea class="chat-input" id="chat-input" rows="3" placeholder="Type your message..."></textarea>
-        <button class="chat-submit" onclick="sendMessage()">Send</button>
-        <a href="{% url 'upgrade_plan' %}" class="settings-button">Upgrade Plan</a>
-        <a href="{% url 'account_logout' %}" class="settings-button">Logout</a>
-        <a href="{% url 'settings' %}" class="settings-button">Settings</a> <!-- Added button for settings -->
+        <div class="input-area">
+            <form action="{% url 'send_message' %}" method="POST">
+                {% csrf_token %}
+                <input type="text" name="message" placeholder="Type a message..." required>
+                <button type="submit">Send</button>
+            </form>
+        </div>
+        <button onclick="location.href='{% url 'settings' %}'">Settings</button>
+        <button onclick="location.href='{% url 'upgrade_plan' %}'">Upgrade Plan</button>
     </div>
-
-    <!-- Include your JavaScript for chat functionality -->
-    <script>
-        function sendMessage() {
-            var messageInput = document.getElementById('chat-input').value;
-            if (messageInput.trim() !== '') {
-                var chatMessages = document.getElementById('chat-messages');
-                var newMessage = document.createElement('p');
-                newMessage.textContent = messageInput;
-                chatMessages.appendChild(newMessage);
-                document.getElementById('chat-input').value = '';
-            }
-        }
-    </script>
 </body>
 </html>
