@@ -10,9 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 import os
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+from daphne.server import Server
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -39,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'daphne',
     'django.contrib.staticfiles',
     'accounts',
     'django.contrib.sites',
@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'dj_rest_auth.registration',
     'channels',
     'dashboard',
+    
 ]
 
 MIDDLEWARE = [
@@ -199,3 +200,9 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
+
+import os
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_NAME = 'sessionid'

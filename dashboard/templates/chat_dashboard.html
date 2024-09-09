@@ -1,5 +1,3 @@
-<!-- templates/chat_dashboard.html -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,54 +5,123 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Dashboard</title>
     <style>
+        /* Styles for Chat Container */
         .chat-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            font-family: Arial, sans-serif;
         }
+        /* Styles for Messages Display */
         .messages {
-            flex-grow: 1;
+            max-height: 300px;
             overflow-y: auto;
-        }
-        .input-area {
-            display: flex;
+            margin-bottom: 10px;
             padding: 10px;
-            border-top: 1px solid #ccc;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
         }
-        .input-area input {
-            flex-grow: 1;
+        .messages div {
+            margin-bottom: 5px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            display: inline-block;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #4CAF50;
+            color: white;
+            float: right;
+        }
+        .bot-message {
+            background-color: #2196F3;
+            color: white;
+            float: left;
+        }
+        /* Styles for Input and Buttons */
+        form {
+            display: flex;
+            margin-top: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
+            font-size: 16px;
         }
-        .input-area button {
-            margin-left: 10px;
+        button {
             padding: 10px 20px;
+            margin-left: 10px;
             border: none;
-            background-color: #007bff;
-            color: white;
             border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .logout-button {
+            background-color: #f44336;
+            color: white;
+        }
+        .upgrade-button {
+            background-color: #FFC107;
+            color: #333;
         }
     </style>
+    <script>
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/'
+        );
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            displayMessage(data.message, 'bot');
+        };
+
+        function sendMessage(message) {
+            chatSocket.send(JSON.stringify({'message': message}));
+            displayMessage(message, 'user');
+        }
+
+        function displayMessage(message, type) {
+            const messagesContainer = document.querySelector('.messages');
+            const messageElement = document.createElement('div');
+            messageElement.innerText = message;
+            messageElement.classList.add(type + '-message');
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelector('form').addEventListener('submit', function (e) {
+                e.preventDefault();
+                const messageInputDom = document.querySelector('#message-input');
+                const message = messageInputDom.value.trim();
+                if (message !== '') {
+                    sendMessage(message);
+                    messageInputDom.value = '';
+                }
+            });
+        });
+    </script>
 </head>
 <body>
     <div class="chat-container">
         <div class="messages">
-            {% for message in messages %}
-                <div class="message">
-                    <strong>{{ message.role }}:</strong> {{ message.message }}
-                </div>
-            {% endfor %}
+            <div class="bot-message">Welcome to Chat Dashboard!</div>
+            <!-- Messages will appear here -->
         </div>
-        <div class="input-area">
-            <form action="{% url 'send_message' %}" method="POST">
-                {% csrf_token %}
-                <input type="text" name="message" placeholder="Type a message..." required>
-                <button type="submit">Send</button>
-            </form>
-        </div>
+        <form>
+            <input id="message-input" type="text" autocomplete="off" placeholder="Type your message...">
+            <button type="submit">Send</button>
+        </form>
         <button onclick="location.href='{% url 'settings' %}'">Settings</button>
-        <button onclick="location.href='{% url 'upgrade_plan' %}'">Upgrade Plan</button>
+        <button onclick="location.href='{% url 'upgrade_plan' %}'" class="upgrade-button">Upgrade Plan</button>
+        <button onclick="location.href='{% url 'account_logout' %}'" class="logout-button">Logout</button>
     </div>
 </body>
 </html>

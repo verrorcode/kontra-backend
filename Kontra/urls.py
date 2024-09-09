@@ -16,10 +16,28 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
-
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+from dashboard.routing import websocket_urlpatterns 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('', include('dashboard.urls')),
    
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# WebSocket routing
+application = ProtocolTypeRouter({
+    'websocket': AuthMiddlewareStack(
+        URLRouter(
+            websocket_urlpatterns  # Your WebSocket URL patterns defined in myapp.routing
+        )
+    ),
+    # Other protocol configurations if needed
+})
