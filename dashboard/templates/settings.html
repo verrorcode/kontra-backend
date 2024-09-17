@@ -1,60 +1,98 @@
-<!-- templates/settings.html -->
+<!-- settings.html -->
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings</title>
-</head>
-<body>
-    <h2>Settings</h2>
-    <form action="{% url 'upload_document' %}" method="POST" enctype="multipart/form-data">
-        {% csrf_token %}
-        <label for="document">Upload Document:</label>
-        <input type="file" name="document" required>
-        <label for="folder">Folder:</label>
-        <select name="folder_id">
-            <option value="">None</option>
-            {% for folder in folders %}
-                <option value="{{ folder.id }}">{{ folder.name }}</option>
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="container mt-5">
+        <h2>Settings</h2>
+
+        <!-- Folder Creation Form -->
+        <div class="mb-4">
+            <h4>Create a new folder</h4>
+            <form method="post" action="{% url 'create_folder' %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <input type="text" name="folder_name" class="form-control" placeholder="Enter folder name" required>
+                </div>
+                <button type="submit" class="btn btn-primary mt-2">Create Folder</button>
+            </form>
+        </div>
+
+        <!-- Document Upload Form -->
+        <div class="mb-4">
+            <h4>Upload Document</h4>
+            <form method="post" action="{% url 'upload_document' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-group">
+                    <input type="file" name="document" multiple class="form-control" required>
+                </div>
+                <div class="form-group mt-2">
+                    <label for="folder">Select Folder (optional)</label>
+                    <select name="folder_id" id="folder" class="form-control">
+                        <option value="">No Folder</option>
+                        {% for folder in folders_with_documents %}
+                            <option value="{{ folder.id }}">{{ folder.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success mt-2">Upload Document</button>
+            </form>
+        </div>
+
+        <!-- Display Folders and Documents -->
+        <div class="folders-documents">
+            {% for folder, documents in folders_with_documents.items %}
+                <div class="folder-section mb-4">
+                    <h4>{{ folder.name }}</h4>
+                    <ul class="list-group">
+                        {% for document in documents %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ document.file.name }}
+                                <!-- Ensure the document has a valid ID before rendering the delete button -->
+                                {% if document.id %}
+                                    <form method="post" action="{% url 'delete_document' document.id %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger btn-sm">Delete Document</button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-danger">Invalid document ID</span>
+                                {% endif %}
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item">No documents in this folder.</li>
+                        {% endfor %}
+                    </ul>
+
+                    <!-- Delete Folder Form -->
+                    <form method="post" action="{% url 'delete_folder' folder.id %}" class="mt-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-warning">Delete Folder</button>
+                    </form>
+                </div>
             {% endfor %}
-        </select>
-        <button type="submit">Upload</button>
-    </form>
-    <br>
-    <form action="{% url 'create_folder' %}" method="POST">
-        {% csrf_token %}
-        <label for="folder_name">Create Folder:</label>
-        <input type="text" name="folder_name" required>
-        <button type="submit">Create</button>
-    </form>
-    <br>
-    <h3>Documents</h3>
-    <ul>
-        {% for document in documents %}
-            <li>
-                {{ document.file.name }}
-                <form action="{% url 'delete_document' document.id %}" method="POST" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Delete</button>
-                </form>
-            </li>
-        {% endfor %}
-    </ul>
-    <h3>Folders</h3>
-    <ul>
-        {% for folder in folders %}
-            <li>
-                {{ folder.name }}
-                <form action="{% url 'delete_folder' folder.id %}" method="POST" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Delete</button>
-                </form>
-            </li>
-        {% endfor %}
-    </ul>
-    <br>
-    <button onclick="location.href='{% url 'chat_dashboard' %}'">Back to Chat</button>
-</body>
-</html>
+
+            <!-- Base Directory Documents -->
+            <div class="base-directory-section mb-4">
+                <h4>Base Directory Documents</h4>
+                <ul class="list-group">
+                    {% for document in base_directory_documents %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ document.file.name }}
+                            <!-- Ensure the document has a valid ID before rendering the delete button -->
+                            {% if document.id %}
+                                <form method="post" action="{% url 'delete_document' document.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete Document</button>
+                                </form>
+                            {% else %}
+                                <span class="text-danger">Invalid document ID</span>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item">No documents in base directory.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+{% endblock %}

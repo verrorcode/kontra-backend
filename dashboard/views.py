@@ -3,7 +3,6 @@
 from django.http import JsonResponse
 from django.views import View
 from django.core.files.base import ContentFile
-import io
 import numpy as np
 import os
 from django.contrib.auth.decorators import login_required
@@ -26,17 +25,24 @@ import asyncio
 from .serializer import UserProfileSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-
+from django.contrib import messages
+from asgiref.sync import sync_to_async
+from django.db import transaction
+from django.db.models import Sum
+import tempfile
+from django.core.files.uploadedfile import InMemoryUploadedFile
+import io
+from .tasks import process_document_task, delete_embeddings_task  # Import the background task
+from decimal import Decimal
 # Work in Progress
-@method_decorator(csrf_exempt, name='dispatch')
+
 class RechargeCredits(LoginRequiredMixin, View):
     pass
-@method_decorator(csrf_exempt, name='dispatch')
+
 class UpgradePlanView(LoginRequiredMixin, TemplateView):
     template_name = 'upgrade_plan.html'
     pass
-@method_decorator(csrf_exempt, name='dispatch')
+
 class RechargeCreditsView(LoginRequiredMixin, View):
     pass
 
@@ -46,21 +52,104 @@ class RechargeCreditsView(LoginRequiredMixin, View):
 
 # Done 
 
+class DocumentUploadView(View):
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        response_data = self.process_documents(user, request.FILES, request.POST)
+        return JsonResponse(response_data, safe=False)
+
+    def process_documents(self, user, files, post_data):
+        response_data = []
+        user_profile = self.get_user_profile(user)
+        saas_plan = user_profile.saas_plan
+
+        if not user_profile.is_plan_active:
+            return [{"status": "error", "message": "Your plan is not active"}]
+
+        for file in files.getlist('document'):
+            file_key = file.name
+            file_size = Decimal(file.size / (1024 * 1024))  # Convert file size to MB
+
+            total_storage_used = Decimal(self.get_total_storage_used(user))
+
+            max_storage_mb = Decimal(saas_plan.max_storage_mb)
+            if total_storage_used + file_size > max_storage_mb:
+                response_data.append({"status": "error", "file": file_key, "message": "Storage limit exceeded"})
+                continue
+
+            total_docs = self.get_total_documents(user)
+            if total_docs >= saas_plan.max_documents:
+                response_data.append({"status": "error", "file": file_key, "message": "Documents limit exceeded"})
+                continue
+
+            try:
+                # Save document temporarily and process in the background
+                temp_file_path = self.save_temp_file(file)
+                document = self.save_document(user, file,  file_size, post_data.get("folder_id"))
+
+
+                # Update document with cloudflare link after successful upload
+                with open(temp_file_path, 'rb') as temp_file:
+                    upload_success, cloudflare_link = upload_document(file_key, temp_file)
+                
+                if upload_success:
+                    # Enqueue the document processing task
+                    process_document_task(file_key, user.id, document.id, cloudflare_link)
+                    document.cloudflare_link = cloudflare_link
+                    document.save()
+                    response_data.append({"status": "success", "file": file_key, "message": "Document uploaded and processing in background"})
+                else:
+                    response_data.append({"status": "error", "file": file_key, "message": "Failed to upload document"})
+            except Exception as e:
+                response_data.append({"status": "error", "file": file_key, "message": f"Error processing document: {str(e)}"})
+            finally:
+                os.unlink(temp_file_path)
+
+        return response_data
+
+    def save_temp_file(self, file):
+        temp_file_path = tempfile.mktemp()  # Create a temporary file
+        with open(temp_file_path, 'wb') as temp_file:
+            for chunk in file.chunks():
+                temp_file.write(chunk)
+        return temp_file_path
+    
+    def get_user_profile(self, user):
+        return UserProfile.objects.select_related('saas_plan').get(user=user)
+
+    def get_total_storage_used(self, user):
+        return user.userprofile.total_storage_used
+
+    def get_total_documents(self, user):
+        return user.userprofile.total_documents_uploaded
+
+    @transaction.atomic
+    def save_document(self, user, file, file_size, folder_id):
+        return Document.objects.create(
+            user=user,
+            file=file,
+            file_type=file.content_type,
+            folder_id=folder_id,
+            file_size=file_size
+        )
+
+    
+
 class ChatDashboardView(LoginRequiredMixin, View):
     template_name = 'chat_dashboard.html'
 
     def get(self, request, *args, **kwargs):
+        # Fetch or create the user's profile
+        user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+
         # Fetch all chat messages for the logged-in user, ordered by timestamp
         messages = ChatMessage.objects.filter(user=request.user).order_by('timestamp')
-        
-        # Fetch the user's profile
-        user_profile = get_object_or_404(UserProfile, user=request.user)
-        
+
         # Extract plan, status, and credits information
         plan = user_profile.saas_plan
         status = user_profile.is_plan_active
         credits = user_profile.credits + user_profile.recharged_credits
-        
+
         # Prepare the context with messages and user profile details
         context = {
             'messages': messages,
@@ -68,11 +157,10 @@ class ChatDashboardView(LoginRequiredMixin, View):
             'is_plan_active': status,
             'credits': credits,
         }
-        
+
         # Render the template with the context
         return render(request, self.template_name, context)
 
-@method_decorator(csrf_exempt, name='dispatch')
 class SettingsView(LoginRequiredMixin, TemplateView):
     template_name = 'settings.html'
 
@@ -99,88 +187,29 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         
         return context
 
-@method_decorator(csrf_exempt, name='dispatch')
+
 class UserProfileView(LoginRequiredMixin, APIView):
     def get(self, request, *args, **kwargs):
         user_profile = get_object_or_404(UserProfile, user=request.user)
         serializer = UserProfileSerializer(user_profile)
         return Response(serializer.data)
 
-@method_decorator(csrf_exempt, name='dispatch')
-class DocumentUploadView(View):
-    async def post(self, request, *args, **kwargs):
-        user = request.user  # Get the user
-        user_profile = UserProfile.objects.get(user=user)
-        saas_plan = user_profile.saas_plan
-        total_docs = user_profile.total_documents_uploaded
-        total_storage_used = user_profile.total_storage_used
-        response_data = []
-
-        if not user_profile.is_plan_active:
-            return JsonResponse({"status": "error", "message": "Your plan is not active"})
-
-        # Iterate over all uploaded files
-        for file in request.FILES.getlist('document'):
-            file_key = file.name
-            file_size = file.size / (1024 * 1024)  # Convert file size to MB
-
-            # Check if the total storage exceeds the plan's limit
-            if total_storage_used + file_size > user_profile.saas_plan.max_storage_mb:
-                response_data.append({"status": "error", "file": file_key, "message": "Storage limit exceeded"})
-                continue  # Skip to the next file
-            
-            # Check if the total documents exceed the plan's limit
-            if total_docs >= saas_plan.max_documents:
-                response_data.append({"status": "error", "file": file_key, "message": "Documents limit exceeded"})
-                continue  # Skip to the next file
-
-            # Upload the document to Cloudflare asynchronously
-            try:
-                cloud_url = await upload_document(file_key, file)  # Await the async file upload function
-            except Exception as e:
-                response_data.append({"status": "error", "file": file_key, "message": f"Failed to upload to Cloudflare: {str(e)}"})
-                continue  # Skip to the next file if upload fails
-
-            # Initialize the DocumentProcessor for the specific user
-            doc_processor = DocumentProcessor(user.id)
-
-            # Process the document directly from the uploaded file
-            file_stream = io.BytesIO(file.read())
-             
-            if doc_processor.process_document_embeddings(file_stream, file_key):
-                # Save the document and its metadata to the database
-                Document.objects.create(
-                    user=user,
-                    file=file,
-                    file_type=file.content_type,
-                    embedding= True ,  # You can update this later if needed
-                    folder=request.data.get("folder_id"),  # Set a folder if required
-                    file_size=file_size,  # Save the file size in MB
-                    cloudflare_url=cloud_url  # Save the uploaded file's Cloudflare URL
-                )
-                response_data.append({"status": "success", "file": file_key, "message": "Document processed"})
-                
-            else:
-                response_data.append({"status": "error", "file": file_key, "message": "Failed to process document"})
-
-        return JsonResponse(response_data, safe=False)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class  OpenFolderView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         folder = request.data.get('folder_id')
         docs = Document.objects.get(folder_id = folder)
         return docs
     
-@method_decorator(csrf_exempt, name='dispatch')
+
 class CreateFolderView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        folder_name = request.data.get('folder_name')
+        folder_name = request.POST.get('folder_name')
         Folder.objects.create(user=request.user, name=folder_name)
         return redirect('settings')
 
-@method_decorator(csrf_exempt, name='dispatch')
+
 class DeleteDocumentView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         # Get the document belonging to the authenticated user
@@ -201,9 +230,38 @@ class DeleteDocumentView(LoginRequiredMixin, View):
         # Redirect to the settings page after successful deletion
         return redirect('settings')
 
-@method_decorator(csrf_exempt, name='dispatch')
+
+# class DeleteFolderView(LoginRequiredMixin, View):
+#     def post(self, request, *args, **kwargs):
+#         folder = get_object_or_404(Folder, id=kwargs['folder_id'], user=request.user)
+        
+#         # Get all documents associated with this folder
+#         documents = Document.objects.filter(folder=folder)
+        
+#         if documents.exists():
+#             # Initialize the DocumentProcessor for the current user
+#             doc_processor = DocumentProcessor(request.user.id)
+
+#             # Create an async task list to delete embeddings for all documents in the folder
+#             tasks = []
+#             for document in documents:
+#                 file_key = document.file.name  # Assuming file_key is the file name
+#                 tasks.append(delete_embeddings_task(request.user.id,file_key))
+
+#             # Run all the delete tasks asynchronously
+#             loop = asyncio.get_event_loop()
+#             loop.run_until_complete(asyncio.gather(*tasks))  # Directly run async tasks
+            
+#             # Delete all the documents after embeddings have been removed
+#             documents.delete()
+
+#         # Delete the folder itself
+#         folder.delete()
+
+#         return redirect('settings')
+
 class DeleteFolderView(LoginRequiredMixin, View):
-    def post(self, request, *args, **kwargs):
+    async def post(self, request, *args, **kwargs):
         folder = get_object_or_404(Folder, id=kwargs['folder_id'], user=request.user)
         
         # Get all documents associated with this folder
@@ -211,17 +269,16 @@ class DeleteFolderView(LoginRequiredMixin, View):
         
         if documents.exists():
             # Initialize the DocumentProcessor for the current user
-            doc_processor = DocumentProcessor(request.user.id)
 
-            # Create an async task list to delete embeddings for all documents in the folder
+            # Create async tasks to delete embeddings for all documents in the folder
             tasks = []
             for document in documents:
-                file_key = document.file.name  # Assuming file_key is the file name
-                tasks.append(doc_processor.del_embeddings(file_key))
+                file_key = document.file.name
+                task = asyncio.create_task(delete_embeddings_task(file_key, request.user.id))
+                tasks.append(task)
 
             # Run all the delete tasks asynchronously
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(asyncio.gather(*tasks))  # Directly run async tasks
+            await asyncio.gather(*tasks)
             
             # Delete all the documents after embeddings have been removed
             documents.delete()
@@ -230,7 +287,3 @@ class DeleteFolderView(LoginRequiredMixin, View):
         folder.delete()
 
         return redirect('settings')
-
-
-
-

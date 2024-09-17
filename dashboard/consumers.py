@@ -14,10 +14,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_name = f"user_{self.user.id}"
         self.room_group_name = f"chat_{self.room_name}"
 
+
+        await self.accept()
         # Fetch user profile to check total credits
         user_profile = await UserProfile.objects.aget(user=self.user)
 
-        total_credits = user_profile.credits + user_profile.recharge_credits
+        total_credits = user_profile.credits + user_profile.recharged_credits
 
         if total_credits < 10:  # Require at least 10 credits to start
             await self.send(text_data=json.dumps({
@@ -32,7 +34,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
 
-        await self.accept()
+        
 
     async def disconnect(self, close_code):
         # Leave room group
@@ -47,7 +49,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Fetch user profile to check total credits
         user_profile = await UserProfile.objects.aget(user=self.user)
-        total_credits = user_profile.credits + user_profile.recharge_credits
+        total_credits = user_profile.credits + user_profile.recharged_credits
 
         if total_credits < 10:
             await self.send(text_data=json.dumps({
@@ -59,24 +61,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
         query_processor = Querying(self.user.id)
         answer = await database_sync_to_async(query_processor.query)(message)
 
+        # Convert answer to a serializable format if needed
+        if isinstance(answer, (dict, list)):
+            serialized_answer = answer
+        else:
+            serialized_answer = str(answer)  # or use another appropriate serialization
+
         # Deduct 10 credits for each query
         await self.deduct_credits(user_profile)
 
         # Send message to WebSocket
         await self.send(text_data=json.dumps({
-            'message': answer
+            'message': serialized_answer
         }))
+
 
     @database_sync_to_async
     def deduct_credits(self, user_profile):
-        total_credits = user_profile.credits + user_profile.recharge_credits
+        total_credits = user_profile.credits + user_profile.recharged_credits
 
         # Deduct credits first from recharge_credits, then from plan credits
-        if user_profile.recharge_credits >= 10:
-            user_profile.recharge_credits -= 10
+        if user_profile.recharged_credits >= 10:
+            user_profile.recharged_credits -= 10
         elif total_credits >= 10:
-            remaining_credits = 10 - user_profile.recharge_credits
-            user_profile.recharge_credits = 0
+            remaining_credits = 10 - user_profile.recharged_credits
+            user_profile.recharged_credits = 0
             user_profile.credits -= remaining_credits
 
         user_profile.save()

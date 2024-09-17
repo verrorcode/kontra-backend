@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     'dj_rest_auth.registration',
     'channels',
     'dashboard',
+    'background_task',
+
     
 ]
 
@@ -71,7 +73,7 @@ ROOT_URLCONF = 'Kontra.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -206,3 +208,5 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_NAME = 'sessionid'
+
+CDN_CUSTOM_DOMAIN_STATIC_IMG = 'https://static.admirian.com/'

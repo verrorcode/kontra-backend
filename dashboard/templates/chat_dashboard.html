@@ -7,17 +7,23 @@
     <style>
         /* Styles for Chat Container */
         .chat-container {
-            max-width: 600px;
+            max-width: 90vw; /* 90% of the viewport width for responsiveness */
             margin: 20px auto;
             padding: 20px;
             border: 1px solid #ccc;
             border-radius: 5px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 80vh; /* Takes up 80% of the viewport height */
         }
+
         /* Styles for Messages Display */
         .messages {
-            max-height: 300px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             overflow-y: auto;
             margin-bottom: 10px;
             padding: 10px;
@@ -29,20 +35,20 @@
             margin-bottom: 5px;
             padding: 8px 12px;
             border-radius: 10px;
-            display: inline-block;
             max-width: 70%;
             word-wrap: break-word;
         }
         .user-message {
             background-color: #4CAF50;
             color: white;
-            float: right;
+            align-self: flex-end;
         }
         .bot-message {
             background-color: #2196F3;
             color: white;
-            float: left;
+            align-self: flex-start;
         }
+
         /* Styles for Input and Buttons */
         form {
             display: flex;
@@ -71,32 +77,73 @@
             background-color: #FFC107;
             color: #333;
         }
+        .nav-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .visually-hidden {
+            position: absolute;
+            left: -10000px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
+        /* Button Hover and Active Effects */
+        button:hover {
+            opacity: 0.9;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
     </style>
     <script>
-        const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/'
-        );
-
-        chatSocket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            displayMessage(data.message, 'bot');
-        };
-
-        function sendMessage(message) {
-            chatSocket.send(JSON.stringify({'message': message}));
-            displayMessage(message, 'user');
-        }
-
-        function displayMessage(message, type) {
-            const messagesContainer = document.querySelector('.messages');
-            const messageElement = document.createElement('div');
-            messageElement.innerText = message;
-            messageElement.classList.add(type + '-message');
-            messagesContainer.appendChild(messageElement);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
         document.addEventListener('DOMContentLoaded', function () {
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const chatSocket = new WebSocket(
+                protocol + window.location.host + '/ws/chat/'  // Make sure to check this path matches your routing
+            );
+
+            chatSocket.onopen = function(e) {
+                console.log("WebSocket connection established.");
+                displayMessage("Connected to the chat server.", 'bot');
+            };
+
+            chatSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                displayMessage(data.message, 'bot');
+            };
+
+            chatSocket.onerror = function(error) {
+                console.error("WebSocket error:", error);
+                displayMessage("Connection error. Please try again later.", 'bot');
+            };
+
+            chatSocket.onclose = function(e) {
+                console.log("WebSocket connection closed.");
+                displayMessage("Connection closed.", 'bot');
+            };
+
+            function sendMessage(message) {
+                if (chatSocket.readyState === WebSocket.OPEN) {
+                    chatSocket.send(JSON.stringify({'message': message}));
+                    displayMessage(message, 'user');
+                } else {
+                    displayMessage("Unable to send message. Connection is closed.", 'bot');
+                }
+            }
+
+            function displayMessage(message, type) {
+                const messagesContainer = document.querySelector('.messages');
+                const messageElement = document.createElement('div');
+                messageElement.innerText = message;
+                messageElement.classList.add(type + '-message');
+                messagesContainer.appendChild(messageElement);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
             document.querySelector('form').addEventListener('submit', function (e) {
                 e.preventDefault();
                 const messageInputDom = document.querySelector('#message-input');
@@ -106,22 +153,27 @@
                     messageInputDom.value = '';
                 }
             });
+
+            // Initial welcome message
+            displayMessage("Welcome to Chat Dashboard!", 'bot');
         });
     </script>
 </head>
 <body>
     <div class="chat-container">
         <div class="messages">
-            <div class="bot-message">Welcome to Chat Dashboard!</div>
             <!-- Messages will appear here -->
         </div>
         <form>
-            <input id="message-input" type="text" autocomplete="off" placeholder="Type your message...">
-            <button type="submit">Send</button>
+            <label for="message-input" class="visually-hidden">Type your message</label>
+            <input id="message-input" type="text" autocomplete="off" placeholder="Type your message..." aria-label="Type your message">
+            <button type="submit" aria-label="Send message">Send</button>
         </form>
-        <button onclick="location.href='{% url 'settings' %}'">Settings</button>
-        <button onclick="location.href='{% url 'upgrade_plan' %}'" class="upgrade-button">Upgrade Plan</button>
-        <button onclick="location.href='{% url 'account_logout' %}'" class="logout-button">Logout</button>
+        <div class="nav-buttons">
+            <button onclick="location.href='{% url 'settings' %}'">Settings</button>
+            <button onclick="location.href='{% url 'upgrade_plan' %}'" class="upgrade-button">Upgrade Plan</button>
+            <button onclick="location.href='{% url 'account_logout' %}'" class="logout-button">Logout</button>
+        </div>
     </div>
 </body>
 </html>
