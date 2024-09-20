@@ -1,49 +1,42 @@
-from background_task import background
+
+from celery import shared_task
 from .models import Document
 from .rag import DocumentProcessor
 import io
-import os
 import requests
-import asyncio
+import os
 
-
-@background(schedule=0)
-def process_document_task(file_key,user_id, document_id, cloudflare_url):
+@shared_task
+def process_document_task(file_key, user_id, document_id, cloudflare_url):
     try:
-        print(cloudflare_url)
-        # import pdb;pdb.set_trace()
-        # Fetch the file from the Cloudflare URL
         response = requests.get(cloudflare_url)
         if response.status_code == 200:
-            file_content = response.content  # This is bytes
+            file_content = response.content
         else:
             print(f"Error: Failed to download file from Cloudflare: {response.status_code}")
             return
-        user_id_filename = str(user_id) + '_' + file_key
-        # Initialize the document processor
+
+        user_id_filename = f"{user_id}_{file_key}"
+        base_filename = os.path.splitext(user_id_filename)[0]
         doc_processor = DocumentProcessor(user_id)
-        
-        # Call the async process_document function properly
-        vector_index, summary_index = asyncio.run(doc_processor.process_document(user_id_filename,io.BytesIO(file_content)))
-        
-        # Fetch and update the document
+        # Ensure this is a synchronous call
+        vector_index, summary_index = doc_processor.process_document(base_filename, io.BytesIO(file_content))
+
         document = Document.objects.get(pk=document_id)
         if vector_index and summary_index:
             document.embeddings_stored = True
+            document.file_key = base_filename
             document.save()
-
     except Exception as e:
-        # Handle exceptions
         print(f"Error processing document: {str(e)}")
 
 
-@background(schedule=0)
-def delete_embeddings_task(file_key, user_id):
+@shared_task
+def delete_embeddings_task(file_key,user_id):
     try:
-        user_id_filename = str(user_id) + '_' + file_key
-        # Initialize the document processor with a relevant user_id or context
+    
         doc_processor = DocumentProcessor(user_id=user_id)
-        success = asyncio.run(doc_processor.del_embeddings(user_id_filename))
+        success = doc_processor.del_embeddings(file_key)
         if success:
             print(f"Successfully deleted embeddings for {file_key}")
         else:

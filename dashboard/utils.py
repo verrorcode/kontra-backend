@@ -56,6 +56,7 @@ def upload_document(file_key, file):
         tuple: A tuple with (True, permanent_url) on success or (False, error_message) on failure.
     """
     try:
+        
         # Determine the MIME type of the file
         mime_type, _ = mimetypes.guess_type(file_key)
         file_extension = file_key.split('.')[-1].lower()

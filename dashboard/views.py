@@ -94,7 +94,8 @@ class DocumentUploadView(View):
                 
                 if upload_success:
                     # Enqueue the document processing task
-                    process_document_task(file_key, user.id, document.id, cloudflare_link)
+                    
+                    process_document_task.delay(file_key, user.id, document.id, cloudflare_link)
                     document.cloudflare_link = cloudflare_link
                     document.save()
                     response_data.append({"status": "success", "file": file_key, "message": "Document uploaded and processing in background"})
@@ -133,7 +134,30 @@ class DocumentUploadView(View):
             file_size=file_size
         )
 
-    
+
+class DeleteFolderView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        folder = get_object_or_404(Folder, id=kwargs['folder_id'], user=request.user)
+        
+        # Get all documents associated with this folder
+        documents = Document.objects.filter(folder=folder)
+        
+        if documents.exists():
+            # Create async tasks to delete embeddings for all documents in the folder
+            for document in documents:
+                file_key = document.file_key
+                # Use Celery's delay method to call the task asynchronously
+                delete_embeddings_task.delay(file_key, request.user.id)
+
+            # Delete all the documents after embeddings have been removed
+            documents.delete()
+
+        # Delete the folder itself
+        folder.delete()
+        profile = UserProfile.objects.get(user=request.user)
+        profile.total_documents_uploaded = Document.objects.filter(user=request.user).count()
+        profile.save()
+        return redirect('settings')
 
 class ChatDashboardView(LoginRequiredMixin, View):
     template_name = 'chat_dashboard.html'
@@ -215,75 +239,18 @@ class DeleteDocumentView(LoginRequiredMixin, View):
         # Get the document belonging to the authenticated user
         document = get_object_or_404(Document, id=kwargs['document_id'], user=request.user)
 
-        # Extract the file key (assuming the document name is stored in the file field)
-        file_key = document.file.name
+        # Extract the file key (assuming the document name is stored in the file_key field)
+        file_key = document.file_key
 
         # Create an instance of DocumentProcessor with the user ID
-        doc_processor = DocumentProcessor(request.user.id)
-
-        # Call the asynchronous delete embeddings function using async_to_sync
-        async_to_sync(doc_processor.del_embeddings)(file_key)
-
-        # Delete the document from the database
+        # Call the Celery task to delete embeddings asynchronously
+        delete_embeddings_task.delay(file_key, request.user.id)
         document.delete()
+        # Optionally: delete the file from storage
+        # document.file.delete(save=False)
+        profile = UserProfile.objects.get(user=request.user)
+        profile.total_documents_uploaded = Document.objects.filter(user=request.user).count()
+        profile.save()  # This will trigger recalculating any related fields (like storage used) via the UserProfile mode
 
         # Redirect to the settings page after successful deletion
-        return redirect('settings')
-
-
-# class DeleteFolderView(LoginRequiredMixin, View):
-#     def post(self, request, *args, **kwargs):
-#         folder = get_object_or_404(Folder, id=kwargs['folder_id'], user=request.user)
-        
-#         # Get all documents associated with this folder
-#         documents = Document.objects.filter(folder=folder)
-        
-#         if documents.exists():
-#             # Initialize the DocumentProcessor for the current user
-#             doc_processor = DocumentProcessor(request.user.id)
-
-#             # Create an async task list to delete embeddings for all documents in the folder
-#             tasks = []
-#             for document in documents:
-#                 file_key = document.file.name  # Assuming file_key is the file name
-#                 tasks.append(delete_embeddings_task(request.user.id,file_key))
-
-#             # Run all the delete tasks asynchronously
-#             loop = asyncio.get_event_loop()
-#             loop.run_until_complete(asyncio.gather(*tasks))  # Directly run async tasks
-            
-#             # Delete all the documents after embeddings have been removed
-#             documents.delete()
-
-#         # Delete the folder itself
-#         folder.delete()
-
-#         return redirect('settings')
-
-class DeleteFolderView(LoginRequiredMixin, View):
-    async def post(self, request, *args, **kwargs):
-        folder = get_object_or_404(Folder, id=kwargs['folder_id'], user=request.user)
-        
-        # Get all documents associated with this folder
-        documents = Document.objects.filter(folder=folder)
-        
-        if documents.exists():
-            # Initialize the DocumentProcessor for the current user
-
-            # Create async tasks to delete embeddings for all documents in the folder
-            tasks = []
-            for document in documents:
-                file_key = document.file.name
-                task = asyncio.create_task(delete_embeddings_task(file_key, request.user.id))
-                tasks.append(task)
-
-            # Run all the delete tasks asynchronously
-            await asyncio.gather(*tasks)
-            
-            # Delete all the documents after embeddings have been removed
-            documents.delete()
-
-        # Delete the folder itself
-        folder.delete()
-
         return redirect('settings')

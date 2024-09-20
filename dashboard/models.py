@@ -115,6 +115,7 @@ class Document(models.Model):
     file_size = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     cloudflare_link = models.URLField(max_length=500, null=True, blank=True)  # New field for storing the Cloudflare link
     embeddings_stored = models.BooleanField(default=False) 
+    file_key = models.CharField(max_length=255, null=True, blank=True)
     def save(self, *args, **kwargs):
         # Calculate the file size before saving
         self.file_size = self.file.size / (1024 * 1024)  # Size in MB

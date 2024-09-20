@@ -27,7 +27,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }))
             await self.close()
             return
-
+        self.query_processor = Querying(self.user.id)
         # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -58,8 +58,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         # Use the Querying class to process the query
-        query_processor = Querying(self.user.id)
-        answer = await database_sync_to_async(query_processor.query)(message)
+       
+        answer = await database_sync_to_async(self.query_processor.query)(message)
 
         # Convert answer to a serializable format if needed
         if isinstance(answer, (dict, list)):
@@ -78,14 +78,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def deduct_credits(self, user_profile):
-        total_credits = user_profile.credits + user_profile.recharged_credits
+        try:
+            total_credits = user_profile.credits + user_profile.recharged_credits
 
-        # Deduct credits first from recharge_credits, then from plan credits
-        if user_profile.recharged_credits >= 10:
-            user_profile.recharged_credits -= 10
-        elif total_credits >= 10:
-            remaining_credits = 10 - user_profile.recharged_credits
-            user_profile.recharged_credits = 0
-            user_profile.credits -= remaining_credits
+            # Deduct credits first from recharge_credits, then from plan credits
+            if user_profile.recharged_credits >= 10:
+                user_profile.recharged_credits -= 10
+            elif total_credits >= 10:
+                remaining_credits = 10 - user_profile.recharged_credits
+                user_profile.recharged_credits = 0
+                user_profile.credits -= remaining_credits
 
-        user_profile.save()
+            user_profile.save()
+            print(f"Credits successfully deducted. Credits: {user_profile.credits}, Recharged credits: {user_profile.recharged_credits}")
+
+        except Exception as e:
+            print(f"Error deducting credits: {e}")

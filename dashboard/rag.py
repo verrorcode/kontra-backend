@@ -3,7 +3,7 @@ import sys
 from functools import lru_cache
 from typing import List, Optional
 from pathlib import Path
-import asyncio
+import os
 import chromadb
 from asgiref.sync import sync_to_async
 from llama_index.core import VectorStoreIndex, SummaryIndex, SimpleDirectoryReader, StorageContext, Settings
@@ -62,30 +62,18 @@ class DocumentProcessor:
 
         return vector_index, summary_index
     
-    # def process_document(self, file_stream: io.BytesIO, file_key: str):
-        
-
-    #     documents = SimpleDirectoryReader(input_dir=None, input_files=file_stream).load_data()  # Assuming load_data has an async version
-    #     splitter = SentenceSplitter(chunk_size=1024)
-    #     nodes = splitter.get_nodes_from_documents(documents)
-
-    #     # Generate embeddings for each node asynchronously
-    #     # await asyncio.gather(*[
-    #     #     self.embed_node(node) for node in nodes
-    #     # ])
-
-    #     # Create vector and summary indices
-    #     vector_index = VectorStoreIndex(nodes, storage_context=self.storage_context)
-    #     summary_index = SummaryIndex(nodes, storage_context=self.storage_context)
-
-    #     return vector_index, summary_index
-    async def process_document(self, user_id_filename,file_stream: io.BytesIO):
+    def process_document(self, base_filename,file_stream: io.BytesIO):
         # Write the bytes to a temporary file
-        temp_file_name = f"{user_id_filename}.tmp"
+          # This strips the extension
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.tmp', prefix=user_id_filename) as temp_file:
+        # Set up the temporary file path with the exact base file name
+        temp_file_name = os.path.join(tempfile.gettempdir(), base_filename)
+
+        # Write the bytes to the file with the exact name
+        with open(temp_file_name, 'wb') as temp_file:
             temp_file.write(file_stream.read())
-            temp_file.flush()  # Ensure data is written to disk
+            print(temp_file_name)  # Ensure correct file name
+            temp_file.flush() 
 
         # Use the temporary file for loading data
         documents = SimpleDirectoryReader(input_dir=None, input_files=[temp_file.name]).load_data()
@@ -103,9 +91,9 @@ class DocumentProcessor:
 
         return vector_index, summary_index
 
-    async def embed_node(self, node):
+    def embed_node(self, node):
         node.text = self.clean_text(node.text)
-        node.embedding = await self.embed_model.get_text_embedding(node.text)
+        node.embedding = self.embed_model.get_text_embedding(node.text)
 
     def clean_text(self, text):
         return text.strip()
@@ -144,17 +132,33 @@ class DocumentProcessor:
         return text.strip()
     
 
-    async def del_embeddings(self,user_id_filename) -> bool:
+    def del_embeddings(self, file_key, batch_size=5461) -> bool:
         try:
-
-            # Deleting embeddings associated with the file_key
-            self.chroma_collection.delete(where={"file_name": user_id_filename})
+            # Check if embeddings exist for the file_key before deletion
+            embeddings = self.chroma_collection.get(where={"file_name": file_key})
+            
+            if not embeddings["ids"]:
+                print(f"No embeddings found for {file_key}")
+                return False
+            
+            # Get the list of IDs to delete
+            embedding_ids = embeddings["ids"]
+            total_embeddings = len(embedding_ids)
+            
+            # Process deletion in batches
+            for i in range(0, total_embeddings, batch_size):
+                batch_ids = embedding_ids[i:i + batch_size]
+                self.chroma_collection.delete(ids= list(batch_ids),where={"file_name": file_key})
+                print(f"Deleted {len(batch_ids)} embeddings for {file_key}")
+            
+            print(f"Successfully deleted all embeddings for {file_key}")
             return True
+        
         except Exception as e:
             # Log the error or handle it as needed
-            print(f"Error deleting embeddings for {user_id_filename}: {e}")
+            print(f"Error deleting embeddings for {file_key}: {e}")
             return False
-
+         
 class Querying:
     def __init__(self, user_id):
         self.user_id = user_id
@@ -180,72 +184,3 @@ class Querying:
         return response
     
 
-# class DocumentProcessor:
-#     def __init__(self, user_id):
-#         self.user_id = user_id
-#         self.embed_model = embed_model
-#         self.chroma_client, self.chroma_collection, self.vector_store, self.storage_context = self.initialize_client()
-
-#     def initialize_client(self):
-#         collection_name = f"user_{self.user_id}_collection"
-#         chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-#         chroma_collection = chroma_client.get_or_create_collection(collection_name)
-#         vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-#         storage_context = StorageContext.from_defaults(vector_store=vector_store)
-#         return chroma_client, chroma_collection, vector_store, storage_context
-
-#     async def is_document_indexed(self, file_key: str) -> bool:
-#         check = await sync_to_async(self.chroma_collection.get)(where={"file_path": file_key})
-#         # Ensure check is not a dictionary, and correctly handle the return type
-#         if check and 'ids' in check:
-#             return bool(check['ids'])
-#         return False
-
-#     async def process_document(self, file_stream: io.BytesIO, file_key: str):
-        
-
-#         documents = SimpleDirectoryReader(input_dir=None, input_files=file_stream).load_data()  # Assuming load_data has an async version
-#         splitter = SentenceSplitter(chunk_size=1024)
-#         nodes = splitter.get_nodes_from_documents(documents)
-
-#         # Generate embeddings for each node asynchronously
-#         await asyncio.gather(*[
-#             self.embed_node(node) for node in nodes
-#         ])
-
-#         # Create vector and summary indices
-#         vector_index = VectorStoreIndex(nodes, storage_context=self.storage_context)
-#         summary_index = SummaryIndex(nodes, storage_context=self.storage_context)
-
-#         return vector_index, summary_index
-
-#     async def embed_node(self, node):
-#         node.text = self.clean_text(node.text)
-#         node.embedding = await self.embed_model.get_text_embedding_async(node.text)  # Assuming get_text_embedding has an async version
-
-#     async def create_tools_from_stored_data(self, file_key):
-#         nodes = await self.vector_store._get(limit=sys.maxsize, where={"file_path": file_key}).nodes
-#         vector_index = VectorStoreIndex(nodes)
-#         summary_index = SummaryIndex(nodes)
-
-#         return await self.create_tools(vector_index, summary_index, name="from_stored_data")
-
-#     async def create_tools(self, vector_index, summary_index, name: str):
-#         async def vector_query(query: str, page_numbers: Optional[List[str]] = None) -> str:
-#             page_numbers = page_numbers or []
-#             metadata_dicts = [{"key": "page_label", "value": p} for p in page_numbers]
-#             query_engine = vector_index.as_query_engine(similarity_top_k=2)
-#             response = await query_engine.query_async(query)  # Assuming query has an async version
-#             return response
-
-#         async def summary_query(query: str) -> str:
-#             summary_engine = summary_index.as_query_engine(response_mode="tree_summarize")
-#             response = await summary_engine.query_async(query)  # Assuming query has an async version
-#             return response
-
-#         vector_tool = FunctionTool.from_defaults(name=f"vector_tool_{name}", fn=vector_query)
-#         summary_tool = FunctionTool.from_defaults(fn=summary_query, name=f"summary_tool_{name}")
-#         return vector_tool, summary_tool
-
-#     def clean_text(self, text):
-#         return text.strip()

@@ -52,8 +52,7 @@ INSTALLED_APPS = [
     'dj_rest_auth.registration',
     'channels',
     'dashboard',
-    'background_task',
-
+    'django_celery_results',
     
 ]
 
@@ -210,3 +209,24 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_NAME = 'sessionid'
 
 CDN_CUSTOM_DOMAIN_STATIC_IMG = 'https://static.admirian.com/'
+
+
+
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Example for Redis
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # Example for Redis
+
+
+# Configure worker concurrency
+CELERY_WORKER_CONCURRENCY = 1000  # Set appropriate concurrency level
+
+  # Reduce to limit the number of processes
+
+# Configure task-related settings
+CELERY_TASK_ACKS_LATE = True  # Ensure tasks are acknowledged only after completion
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue tasks if worker is lost
+
+# Configure time limits (optional)
+CELERY_TASK_TIME_LIMIT = 600  # Increase time limit per task
+CELERY_TASK_SOFT_TIME_LIMIT = 300 
+CELERY_WORKER_POOL = 'solo'
