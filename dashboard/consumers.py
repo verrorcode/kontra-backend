@@ -3,6 +3,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from .models import UserProfile
 from channels.db import database_sync_to_async
 from .rag import Querying  # Import the new Querying class
+from django.db import transaction
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -79,18 +80,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def deduct_credits(self, user_profile):
         try:
-            total_credits = user_profile.credits + user_profile.recharged_credits
+            with transaction.atomic():
+                user_profile = UserProfile.objects.select_for_update().get(pk=user_profile.pk)
+                total_credits = user_profile.credits + user_profile.recharged_credits
 
-            # Deduct credits first from recharge_credits, then from plan credits
-            if user_profile.recharged_credits >= 10:
-                user_profile.recharged_credits -= 10
-            elif total_credits >= 10:
-                remaining_credits = 10 - user_profile.recharged_credits
-                user_profile.recharged_credits = 0
-                user_profile.credits -= remaining_credits
+                # Deduct credits correctly based on available credits in both fields
+                if user_profile.recharged_credits >= 10:
+                    user_profile.recharged_credits -= 10
+                elif user_profile.recharged_credits > 0:  # Deduct remaining recharged credits first
+                    remaining_deduction = 10 - user_profile.recharged_credits
+                    user_profile.recharged_credits = 0
+                    user_profile.credits -= remaining_deduction
+                elif user_profile.credits >= 10:
+                    user_profile.credits -= 10
+                else:
+                    raise ValueError("Insufficient credits")
 
-            user_profile.save()
-            print(f"Credits successfully deducted. Credits: {user_profile.credits}, Recharged credits: {user_profile.recharged_credits}")
+                user_profile.save()
+                print(f"Credits successfully deducted. Credits: {user_profile.credits}, Recharged credits: {user_profile.recharged_credits}")
 
         except Exception as e:
             print(f"Error deducting credits: {e}")

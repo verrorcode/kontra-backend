@@ -93,7 +93,7 @@ class UserProfile(models.Model):
             self.plan_end_date = self.plan_start_date + timedelta(days=30)
 
         self.is_plan_active = self.plan_end_date and self.plan_end_date > timezone.now()
-        self.credits = self.total_credits
+        
 
         super().save(*args, **kwargs)
 
