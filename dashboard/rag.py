@@ -62,34 +62,34 @@ class DocumentProcessor:
 
         return vector_index, summary_index
     
-    def process_document(self, base_filename,file_stream: io.BytesIO):
-        # Write the bytes to a temporary file
-          # This strips the extension
-
+    def process_document(self, base_filename, file_stream: io.BytesIO):
         # Set up the temporary file path with the exact base file name
         temp_file_name = os.path.join(tempfile.gettempdir(), base_filename)
 
-        # Write the bytes to the file with the exact name
-        with open(temp_file_name, 'wb') as temp_file:
-            temp_file.write(file_stream.read())
-            print(temp_file_name)  # Ensure correct file name
-            temp_file.flush() 
+        try:
+            # Write the bytes to the file with the exact name
+            with open(temp_file_name, 'wb') as temp_file:
+                temp_file.write(file_stream.read())
+                print(temp_file_name)  # Ensure correct file name
+                temp_file.flush()
 
-        # Use the temporary file for loading data
-        documents = SimpleDirectoryReader(input_dir=None, input_files=[temp_file.name]).load_data()
-        
-        splitter = SentenceSplitter(chunk_size=1024)
-        nodes = splitter.get_nodes_from_documents(documents)
+            # Use the temporary file for loading data
+            documents = SimpleDirectoryReader(input_dir=None, input_files=[temp_file_name]).load_data()
 
-        # Generate embeddings for each node asynchronously
-        # tasks = [self.embed_node(node) for node in nodes]
-        # await asyncio.gather(*tasks)
+            splitter = SentenceSplitter(chunk_size=1024)
+            nodes = splitter.get_nodes_from_documents(documents)
 
-        # Create vector and summary indices
-        vector_index = VectorStoreIndex(nodes, storage_context=self.storage_context, embed_model=self.embed_model)
-        summary_index = SummaryIndex(nodes, storage_context=self.storage_context, embed_model=self.embed_model)
+            # Create vector and summary indices
+            vector_index = VectorStoreIndex(nodes, storage_context=self.storage_context, embed_model=self.embed_model)
+            summary_index = SummaryIndex(nodes, storage_context=self.storage_context, embed_model=self.embed_model)
 
-        return vector_index, summary_index
+            return vector_index, summary_index
+
+        finally:
+            # Ensure that the temporary file is deleted
+            if os.path.exists(temp_file_name):
+                os.remove(temp_file_name)
+
 
     def embed_node(self, node):
         node.text = self.clean_text(node.text)
@@ -173,14 +173,20 @@ class Querying:
     
     def query(self, query: str):
         from .variables import llm, embed_model
-        # Create the VectorStoreIndex from the vector store
-        index = VectorStoreIndex.from_vector_store(self.vector_store, embed_model=embed_model)
-        
-        # Create the query engine
-        query_engine = index.as_query_engine(similarity_top_k=4)
-        
-        # Execute the query and return the response
-        response = query_engine.query(query)
-        return response
-    
+        try:
+            # Create the VectorStoreIndex from the vector store
+            index = VectorStoreIndex.from_vector_store(self.vector_store, embed_model=embed_model)
+            
+            # Create the query engine
+            query_engine = index.as_query_engine(similarity_top_k=4)
+            
+            # Execute the query
+            response = query_engine.query(query)
+            
+            # Log and return the response
+            
+            return response
+        except Exception as e:
+            
+            return "An error occurred while processing your query. Please create a ticket"
 
