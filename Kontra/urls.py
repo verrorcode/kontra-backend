@@ -15,19 +15,31 @@ Including another URLconf
 """ 
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.views.generic import TemplateView
-from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from dashboard.routing import websocket_urlpatterns 
+from accounts.views import CustomEmailVerificationView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-urlpatterns = [
+urlpatterns = [ 
+    # path('', include('django.contrib.auth.urls')),
+    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # Login
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # Refresh token
+    
+    path("password-reset/confirm/<uidb64>/<token>/",
+       TemplateView.as_view(template_name="password_reset_confirm.html"),
+       name='password_reset_confirm'),
     path('admin/', admin.site.urls),
-   
-    path('accounts/', include('allauth.urls')),
+    # path('api/auth/password/reset/', PasswordResetView.as_view(), name='password_reset_confirm'),
+
+    path('api/auth/registration/account-confirm-email/<str:key>/', CustomEmailVerificationView.as_view(), name='account_confirm_email'),
+ 
+    path('api/auth/', include('dj_rest_auth.urls')),  # For login, logout, password reset, etc.
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
     path('', include('dashboard.urls')),
    
 ]

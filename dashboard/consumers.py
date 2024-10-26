@@ -65,6 +65,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Convert answer to a serializable format if needed
         if isinstance(answer, (dict, list)):
             serialized_answer = answer
+            
         else:
             serialized_answer = str(answer)  # or use another appropriate serialization
 
@@ -101,3 +102,4 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         except Exception as e:
             print(f"Error deducting credits: {e}")
+

@@ -1,0 +1,99 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django stuff:
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+media/
+uploads/
+
+# Backup files
+*.bak
+*.swp
+
+# Static files
+staticfiles/
+static/
+
+# Local environment variables
+.env
+
+# django-extensions SQLite database
+*.db
+
+# Django migrations
+*/migrations/*
+
+# Test results
+coverage/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# MySQL dumps
+*.sql
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# Ignore SQLite database
+chroma_db/chroma.sqlite3
+
+# Ignore binary files
+chroma_db/*/data_level0.bin
+chroma_db/*/index_metadata.pickle
+
+# Ignore PDF documents if not needed
+documents/*.pdf
+*.pack

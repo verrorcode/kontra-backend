@@ -8,7 +8,7 @@ from llama_index.llms.openai import OpenAI
 CHROMA_DB_PATH = "./chroma_db"
 
 # original embed model
-embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5",trust_remote_code=True)
+embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-large-en-v1.5",trust_remote_code=True)
 
 # groq_key = "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"
 # llm = Groq(model="Llama3-8b-8192", api_key=groq_key)

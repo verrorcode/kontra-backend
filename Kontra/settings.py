@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from daphne.server import Server
+from corsheaders.defaults import default_headers
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -27,7 +28,9 @@ SECRET_KEY = 'django-insecure-vsn!!&^^y8@ydt&w_s%bpzh*w%@%$&3yvf+aub_lk$pp2*91dn
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["vaibhav123.a.pinggy.link","127.0.0.1","localhost"]
+
+
 
 
 # Application definition
@@ -47,24 +50,30 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
     'allauth.socialaccount.providers.facebook',
-    'rest_framework.authtoken',
-    'dj_rest_auth',
-    'dj_rest_auth.registration',
+    
     'channels',
     'dashboard',
     'django_celery_results',
-    
+    'corsheaders',
+    'django_extensions',
+    'dj_rest_auth',
+    'rest_framework_simplejwt',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    
+
 ]
 
 ROOT_URLCONF = 'Kontra.urls'
@@ -194,7 +203,8 @@ ACCOUNT_AUTHENTICATION_METHOD = 'email'
 ACCOUNT_USERNAME_REQUIRED = False
 
 
-REST_USE_JWT = True
+
+
 
 CHANNEL_LAYERS = {
     "default": {
@@ -218,15 +228,108 @@ CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # Example for Redis
 
 
 # Configure worker concurrency
-CELERY_WORKER_CONCURRENCY = 1000  # Set appropriate concurrency level
+# CELERY_WORKER_CONCURRENCY = 1000  # Set appropriate concurrency level
 
   # Reduce to limit the number of processes
 
 # Configure task-related settings
-CELERY_TASK_ACKS_LATE = True  # Ensure tasks are acknowledged only after completion
-CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue tasks if worker is lost
+# CELERY_TASK_ACKS_LATE = True  # Ensure tasks are acknowledged only after completion
+# CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue tasks if worker is lost
 
 # Configure time limits (optional)
-CELERY_TASK_TIME_LIMIT = 600  # Increase time limit per task
-CELERY_TASK_SOFT_TIME_LIMIT = 300 
-CELERY_WORKER_POOL = 'solo'
+# CELERY_TASK_TIME_LIMIT = 600  # Increase time limit per task
+# CELERY_TASK_SOFT_TIME_LIMIT = 300 
+# CELERY_WORKER_POOL = 'solo'
+# Allow credentials (cookies) to be sent in CORS requests
+# Allow credentials to be shared (for APIs that still need it, e.g., login, refresh tokens)
+CORS_ALLOW_CREDENTIALS = True
+
+# Define allowed origins for CORS
+CORS_ALLOWED_ORIGINS = [
+    "https://vaibhav123.a.pinggy.link",
+    "https://app.flutterflow.io",
+    "https://chatbot-homepage-1m5apq.flutterflow.app",
+    "https://ff-debug-service-frontend-pro-ygxkweukma-uc.a.run.app",
+    "http://localhost:8000",   # Local testing
+]
+
+# Specify headers that can be exposed to the browser
+CORS_EXPOSE_HEADERS = [
+    'Authorization',  # So that the frontend can read the Authorization header
+]
+
+# Allow certain headers from frontend requests
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'Authorization',
+    'X-CSRFToken',
+    'X-Requested-With',
+]
+# CSRF settings (if still needed for forms, etc.)
+CSRF_COOKIE_SECURE = True  # True for HTTPS
+CSRF_COOKIE_SAMESITE = 'None'  # Allow cross-origin requests (only if still needed)
+SESSION_COOKIE_SECURE = True  # Should be True if using HTTPS
+SESSION_COOKIE_SAMESITE = 'None'  # Only if still using session cookies
+SESSION_COOKIE_PATH = '/'  # Standard setting
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+# Simple JWT settings
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# DJ Rest Auth additional settings
+REST_AUTH = {
+    'USE_JWT': True,
+    'JWT_AUTH_RETURN_EXPIRATION': True,
+    'TOKEN_MODEL': None,
+    'SESSION_LOGIN': False,
+    'OLD_PASSWORD_FIELD_ENABLED': True,
+    'LOGOUT_ON_PASSWORD_CHANGE': False,
+    # Add these new settings
+    'JWT_AUTH': {
+        'JWT_AUTH_RETURN_EXPIRATION': True,
+        'JWT_AUTH_REFRESH_TOKEN': True,
+    }
+}
+REST_USE_JWT = True
+JWT_AUTH_RETURN_EXPIRATION = True
+REST_SESSION_LOGIN = False
+ACCOUNT_EMAIL_CONFIRMATION_URL = 'http://127.0.0.1:8000/api/auth/registration/verify-email?key={key}'
+DJANGO_REST_AUTH = {
+    'PASSWORD_RESET_CONFIRM_URL': 'password-reset-confirm/{uid}/{token}/',
+}
+LOGOUT_ON_PASSWORD_CHANGE = False
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'dj_rest_auth': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
+}

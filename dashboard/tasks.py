@@ -8,6 +8,8 @@ import os
 
 @shared_task
 def process_document_task(file_key, user_id, document_id, cloudflare_url):
+    from celery.contrib import rdb
+    rdb.set_trace()
     try:
         response = requests.get(cloudflare_url)
         if response.status_code == 200:
