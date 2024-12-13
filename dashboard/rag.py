@@ -5,6 +5,7 @@ from typing import List, Optional
 from pathlib import Path
 import os
 import chromadb
+import uuid
 from asgiref.sync import sync_to_async
 from llama_index.core import VectorStoreIndex, SummaryIndex, SimpleDirectoryReader, StorageContext, Settings
 from llama_index.core.node_parser import SentenceSplitter
@@ -23,8 +24,9 @@ Settings.embed_model = embed_model
 class DocumentProcessor:
     def __init__(self, user_id):
         self.user_id = user_id
-        self.chroma_client, self.chroma_collection, self.vector_store, self.storage_context = self.initialize_client()
         self.embed_model = embed_model
+        self.chroma_client, self.chroma_collection, self.vector_store, self.storage_context = self.initialize_client()
+        
 
     def initialize_client(self):
         collection_name = f"user_{self.user_id}_collection"
@@ -65,6 +67,7 @@ class DocumentProcessor:
     def process_document(self, base_filename, file_stream: io.BytesIO):
         # Set up the temporary file path with the exact base file name
         temp_file_name = os.path.join(tempfile.gettempdir(), base_filename)
+        # temp_file_name = os.path.join(tempfile.gettempdir(), f"{base_filename}_{uuid.uuid4()}")
 
         try:
             # Write the bytes to the file with the exact name
@@ -172,6 +175,7 @@ class Querying:
         return vector_store
     
     def query(self, query: str):
+        
         from .variables import llm, embed_model
         try:
             # Create the VectorStoreIndex from the vector store
@@ -182,7 +186,7 @@ class Querying:
             
             # Execute the query
             response = query_engine.query(query)
-            
+            print(response)
             # Log and return the response
             
             return response

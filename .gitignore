@@ -2,7 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.pyd
+*.env
+*.env
 # C extensions
 *.so
 
@@ -57,7 +59,7 @@ static/
 
 # Django migrations
 */migrations/*
-
+!migrations/__init__.py
 # Test results
 coverage/
 .tox/
@@ -93,7 +95,10 @@ chroma_db/chroma.sqlite3
 # Ignore binary files
 chroma_db/*/data_level0.bin
 chroma_db/*/index_metadata.pickle
-
+chroma_db/ 
+docs/ 
+*.bin          # Binary files (like ChromaDB binary files)
+*.sqlite3 
 # Ignore PDF documents if not needed
 documents/*.pdf
 *.pack

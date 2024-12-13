@@ -4,6 +4,7 @@ from django.utils import timezone
 from datetime import timedelta
 from . import variables
 from django.core.validators import MinValueValidator
+from decimal import Decimal
 
 
 class SaaSPlan(models.Model):
@@ -13,48 +14,123 @@ class SaaSPlan(models.Model):
         ('standard', 'Standard'),
         ('premium', 'Premium'),
     ]
-    name = models.CharField(max_length=20, choices=PLAN_CHOICES, unique=True)
+    
+    DURATION_CHOICES = [
+        ('monthly', 'Monthly'),
+        ('yearly', 'Yearly'),
+    ]
+    
+    name = models.CharField(max_length=20, choices=PLAN_CHOICES)
     max_storage_mb = models.IntegerField(default=10)  # Maximum storage allowed in MB
-    price_per_month = models.DecimalField(default=0, max_digits=6, decimal_places=2)  # Monthly price
+    price = models.DecimalField(default=0, max_digits=6, decimal_places=2)  # Total price (monthly or yearly)
     max_queries = models.IntegerField(default=0)  # Maximum number of queries allowed per month
     max_documents = models.IntegerField(default=0)  # Maximum number of documents allowed
+    duration = models.CharField(max_length=7, choices=DURATION_CHOICES, default='monthly')  # 'monthly' or 'yearly'
+    paypal_plan_id = models.CharField(max_length=100, null=True, blank=True, unique=True)  # PayPal Plan ID
 
+    class Meta:
+        unique_together = ('name', 'duration')
+        
     def set_plan_attributes(self):
+        # Set attributes based on the plan's name and duration
         if self.name == 'free':
             self.max_storage_mb = variables.SaasPlanStorage.Free
-            self.max_queries = variables.SaasPlanDocuments.Free
+            self.max_queries = variables.SaasPlanQueries.Free
             self.max_documents = variables.SaasPlanDocuments.Free
-            self.price_per_month = variables.SaasPlanPricing.Free
+            self.price = variables.SaasPlanPricing.Free
         elif self.name == 'basic':
-            self.max_storage_mb = variables.SaasPlanStorage.Basic
-            self.max_queries = variables.SaasPlanDocuments.Basic
-            self.max_documents = variables.SaasPlanDocuments.Basic
-            self.price_per_month = variables.SaasPlanPricing.Basic
+            if self.duration == 'monthly':
+                self.max_storage_mb = variables.SaasPlanStorage.Basic
+                self.max_queries = variables.SaasPlanQueries.Basic
+                self.max_documents = variables.SaasPlanDocuments.Basic
+                self.price = variables.SaasPlanPricing.Basic
+            elif self.duration == 'yearly':
+                self.max_storage_mb = variables.SaasPlanStorage.Basic * 12
+                self.max_queries = variables.SaasPlanQueries.Basic * 12
+                self.max_documents = variables.SaasPlanDocuments.Basic * 12
+                self.price = variables.SaasPlanPricing.BasicYearly
         elif self.name == 'standard':
-            self.max_storage_mb = variables.SaasPlanStorage.Standard
-            self.max_queries = variables.SaasPlanDocuments.Standard
-            self.max_documents = variables.SaasPlanDocuments.Standard
-            self.price_per_month = variables.SaasPlanPricing.Standard
+            if self.duration == 'monthly':
+                self.max_storage_mb = variables.SaasPlanStorage.Standard
+                self.max_queries = variables.SaasPlanQueries.Standard
+                self.max_documents = variables.SaasPlanDocuments.Standard
+                self.price = variables.SaasPlanPricing.Standard
+            elif self.duration == 'yearly':
+                self.max_storage_mb = variables.SaasPlanStorage.Standard * 12
+                self.max_queries = variables.SaasPlanQueries.Standard * 12
+                self.max_documents = variables.SaasPlanDocuments.Standard * 12
+                self.price = variables.SaasPlanPricing.StandardYearly
         elif self.name == 'premium':
-            self.max_storage_mb = variables.SaasPlanStorage.Premium
-            self.max_queries = variables.SaasPlanDocuments.Premium
-            self.max_documents = variables.SaasPlanDocuments.Premium
-            self.price_per_month = variables.SaasPlanPricing.Premium
+            if self.duration == 'monthly':
+                self.max_storage_mb = variables.SaasPlanStorage.Premium
+                self.max_queries = variables.SaasPlanQueries.Premium
+                self.max_documents = variables.SaasPlanDocuments.Premium
+                self.price = variables.SaasPlanPricing.Premium
+            elif self.duration == 'yearly':
+                self.max_storage_mb = variables.SaasPlanStorage.Premium * 12
+                self.max_queries = variables.SaasPlanQueries.Premium * 12
+                self.max_documents = variables.SaasPlanDocuments.Premium * 12
+                self.price = variables.SaasPlanPricing.PremiumYearly
 
-        # Ensure the plan attributes are valid
-        self.save()
+    def save(self, *args, **kwargs):
+        # Ensure plan attributes are set before saving
+        self.set_plan_attributes()
+        super().save(*args, **kwargs)
 
     @property
     def credits(self):
+        # Credits calculation logic
         if self.name == 'free':
             return variables.SaasPlanCredits.Free
         elif self.name == 'basic':
-            return variables.SaasPlanCredits.Basic
+            if self.duration == 'monthly':
+                return variables.SaasPlanCredits.Basic
+            elif self.duration == 'yearly':
+                return variables.SaasPlanCredits.Basic * 12
         elif self.name == 'standard':
-            return variables.SaasPlanCredits.Standard
+            if self.duration == 'monthly':
+                return variables.SaasPlanCredits.Standard
+            elif self.duration == 'yearly':
+                return variables.SaasPlanCredits.Standard * 12
         elif self.name == 'premium':
-            return variables.SaasPlanCredits.Premium
+            if self.duration == 'monthly':
+                return variables.SaasPlanCredits.Premium
+            elif self.duration == 'yearly':
+                return variables.SaasPlanCredits.Premium * 12
         return 0
+
+    def __str__(self):
+        return f"{self.name} - {self.duration.capitalize()} Plan"
+
+    def set_plan_from_paypal_id(self, paypal_plan_id):
+        # Mapping PayPal Plan IDs to the corresponding plans
+        if paypal_plan_id == variables.SaasPlanPaypalMontly.Basic:
+            self.name = 'basic'
+            self.duration = 'monthly'
+        elif paypal_plan_id == variables.SaasPlanPaypalMontly.Standard:
+            self.name = 'standard'
+            self.duration = 'monthly'
+        elif paypal_plan_id == variables.SaasPlanPaypalMontly.Premium:
+            self.name = 'premium'
+            self.duration = 'monthly'
+        elif paypal_plan_id == variables.SaasPlanPaypalYearly.Basic:
+            self.name = 'basic'
+            self.duration = 'yearly'
+        elif paypal_plan_id == variables.SaasPlanPaypalYearly.Standard:
+            self.name = 'standard'
+            self.duration = 'yearly'
+        elif paypal_plan_id == variables.SaasPlanPaypalYearly.Premium:
+            self.name = 'premium'
+            self.duration = 'yearly'
+        else:
+            # Handle unknown plan ID or fallback (optional)
+            self.name = 'free'
+            self.duration = 'monthly'
+
+        self.set_plan_attributes()  # Call to update plan attributes based on the name and duration
+        self.paypal_plan_id = paypal_plan_id  # Save the PayPal Plan ID
+        self.save()
+
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -103,7 +179,7 @@ class UserProfile(models.Model):
 
 class Folder(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, null=True)
 
 class Document(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -111,21 +187,27 @@ class Document(models.Model):
     file_type = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
-    folder = models.ForeignKey(Folder, on_delete=models.SET_NULL, null=True, blank=True)
+    folder = models.ForeignKey('Folder', on_delete=models.SET_NULL, null=True, blank=True)
     file_size = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
-    cloudflare_link = models.URLField(max_length=500, null=True, blank=True)  # New field for storing the Cloudflare link
-    embeddings_stored = models.BooleanField(default=False) 
+    cloudflare_link = models.URLField(max_length=500, null=True, blank=True)
+    embeddings_stored = models.BooleanField(default=False)
     file_key = models.CharField(max_length=255, null=True, blank=True)
+
     def save(self, *args, **kwargs):
-        # Calculate the file size before saving
-        self.file_size = self.file.size / (1024 * 1024)  # Size in MB
+        # Calculate the file size in MB if file is provided
+        if self.file:
+            self.file_size = Decimal(self.file.size) / (1024 * 1024)  # Size in MB
+
         super().save(*args, **kwargs)
 
-        # Update the total documents uploaded in UserProfile
+        # Update the UserProfile's total_documents_uploaded and total_storage_used
         profile, created = UserProfile.objects.get_or_create(user=self.user)
         profile.total_documents_uploaded = Document.objects.filter(user=self.user).count()
-        profile.update_total_storage_used()  # Update the total storage used
+        profile.update_total_storage_used()  # Assumes this method calculates and updates storage used
         profile.save()
+
+    def __str__(self):
+        return f"{self.file.name} ({self.user.username})"
 
 class ChatMessage(models.Model):
     ROLE_CHOICES = [
@@ -137,27 +219,3 @@ class ChatMessage(models.Model):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
 
-class FinanceTransaction(models.Model):
-    PURCHASE_TYPE_CHOICES = [
-        ('credits', 'Credits'),
-        ('plan', 'Plan'),
-    ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-    transaction_date = models.DateTimeField(auto_now_add=True)
-    description = models.CharField(max_length=255)
-    plan = models.ForeignKey(SaaSPlan, on_delete=models.SET_NULL, null=True, blank=True)
-    successful = models.BooleanField(default=True)
-    purchase_type = models.CharField(max_length=50, choices=PURCHASE_TYPE_CHOICES)
-    plan_identifier = models.CharField(max_length=255, null=True, blank=True)
-
-    def apply_transaction(self):
-        profile, created = UserProfile.objects.get_or_create(user=self.user)
-
-        if self.purchase_type == 'plan' and self.plan:
-            profile.saas_plan = self.plan
-            profile.recharged_credits = 0
-            profile.save()
-        elif self.purchase_type == 'credits':
-            profile.recharged_credits += self.amount
-            profile.save()

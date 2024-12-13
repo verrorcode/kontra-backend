@@ -22,7 +22,7 @@ from asgiref.sync import async_to_sync
 from .variables import SaasPlanDocuments
 from .rag import DocumentProcessor
 import asyncio
-from .serializer import UserProfileSerializer
+from .serializer import UserProfileSerializer, DocumentSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib import messages
@@ -34,16 +34,17 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 import io
 from .tasks import process_document_task, delete_embeddings_task  # Import the background task
 from decimal import Decimal
+from rest_framework.permissions import IsAuthenticated
 # Work in Progress
 
-class RechargeCredits(LoginRequiredMixin, View):
+class RechargeCredits(APIView):
     pass
 
-class UpgradePlanView(LoginRequiredMixin, TemplateView):
+class UpgradePlanView(APIView):
     template_name = 'upgrade_plan.html'
     pass
 
-class RechargeCreditsView(LoginRequiredMixin, View):
+class RechargeCreditsView(APIView):
     pass
 
 
@@ -52,7 +53,8 @@ class RechargeCreditsView(LoginRequiredMixin, View):
 
 # Done 
 
-class DocumentUploadView(View):
+class DocumentUploadView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
         user = request.user
         response_data = self.process_documents(user, request.FILES, request.POST)
@@ -83,10 +85,11 @@ class DocumentUploadView(View):
                 continue
 
             try:
+                
                 # Save document temporarily and process in the background
                 temp_file_path = self.save_temp_file(file)
                 document = self.save_document(user, file,  file_size, post_data.get("folder_id"))
-
+                print(document.id)
 
                 # Update document with cloudflare link after successful upload
                 with open(temp_file_path, 'rb') as temp_file:
@@ -126,16 +129,27 @@ class DocumentUploadView(View):
 
     @transaction.atomic
     def save_document(self, user, file, file_size, folder_id):
-        return Document.objects.create(
+        folder = None
+        if folder_id and folder_id.lower() != 'null':
+            try:
+                folder = Folder.objects.get(id=folder_id, user=user)
+            except Folder.DoesNotExist:
+                raise ValueError(f"Folder with id {folder_id} does not exist")
+            except ValueError:
+                raise ValueError(f"Invalid folder ID format: {folder_id}")
+        
+        document = Document.objects.create(
             user=user,
             file=file,
             file_type=file.content_type,
-            folder_id=folder_id,
+            folder=folder,  # This will be None if no valid folder_id was provided
             file_size=file_size
         )
+        return document
 
 
-class DeleteFolderView(LoginRequiredMixin, View):
+class DeleteFolderView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
         folder = get_object_or_404(Folder, id=kwargs['folder_id'], user=request.user)
         
@@ -159,7 +173,8 @@ class DeleteFolderView(LoginRequiredMixin, View):
         profile.save()
         return redirect('settings')
 
-class ChatDashboardView(LoginRequiredMixin, View):
+class ChatDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
     template_name = 'chat_dashboard.html'
 
     def get(self, request, *args, **kwargs):
@@ -185,56 +200,85 @@ class ChatDashboardView(LoginRequiredMixin, View):
         # Render the template with the context
         return render(request, self.template_name, context)
 
-class SettingsView(LoginRequiredMixin, TemplateView):
-    template_name = 'settings.html'
+class SettingsView(APIView):
+    # permission_classes = [IsAuthenticated]
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
+    def get(self, request, **kwargs):
+        # Prepare a combined list for folders and documents
+        base_directory = []
+
         # Get all folders for the current user
-        folders = Folder.objects.filter(user=self.request.user)
-        
-        # Prepare a dictionary to hold folders and their corresponding documents
-        folders_with_documents = {}
-        
+        folders = Folder.objects.filter(user=request.user)
         for folder in folders:
-            # Fetch documents in each folder
-            documents_in_folder = Document.objects.filter(user=self.request.user, folder=folder)
-            folders_with_documents[folder] = documents_in_folder
-        
-        # Fetch documents that are not in any folder (in the base directory)
-        base_directory_documents = Document.objects.filter(user=self.request.user, folder__isnull=True)
-        
-        # Add to context
-        context['folders_with_documents'] = folders_with_documents
-        context['base_directory_documents'] = base_directory_documents
-        
-        return context
+            # Append folders with standardized fields
+            base_directory.append({
+                "id": folder.id,
+                "name": folder.name,
+                "type": "folder",
+                "embeddings_stored": None  # Set to None since folders don’t use embeddings
+            })
+
+        # Get all base directory documents for the current user
+        documents = Document.objects.filter(user=request.user, folder__isnull=True)
+        for doc in documents:
+            # Append documents with standardized fields
+            base_directory.append({
+                "id": doc.id,
+                "name": doc.file.name.split('/')[-1].split('_')[0],  # Get the file name part before '_'
+                "type": doc.file_type.split('/')[-1],  # Get file extension after '/'
+                "embeddings_stored": doc.embeddings_stored
+            })
+
+        # Return the combined response
+        return Response({"base_directory": base_directory})
 
 
-class UserProfileView(LoginRequiredMixin, APIView):
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, *args, **kwargs):
-        user_profile = get_object_or_404(UserProfile, user=request.user)
+        user_profile = get_object_or_404(UserProfile.objects.select_related('saas_plan'), user=request.user)
         serializer = UserProfileSerializer(user_profile)
         return Response(serializer.data)
 
+class UserIDView(APIView):
+    permission_classes = [IsAuthenticated]
 
-
-class  OpenFolderView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
-        folder = request.data.get('folder_id')
-        docs = Document.objects.get(folder_id = folder)
-        return docs
+        # Return only the user ID of the authenticated user
+        return Response({'user_id': request.user.id}, status=200)
+
+
+class OpenFolderView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        folder_id = kwargs.get('folder_id')
+        docs = Document.objects.filter(folder_id=folder_id)
+        
+        # Prepare the response data
+        response_data = []
+        for doc in docs:
+            response_data.append({
+                "id": doc.id,
+                "file_name": os.path.basename(doc.file.name),
+                "embeddings_stored": doc.embeddings_stored,
+                "cloudflare":doc.cloudflare_link
+            })
+        
+        return Response(response_data)
     
 
-class CreateFolderView(LoginRequiredMixin, View):
+class CreateFolderView(APIView):
+    # permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
-        folder_name = request.POST.get('folder_name')
+        folder_name = request.data.get('folder_name')
         Folder.objects.create(user=request.user, name=folder_name)
         return redirect('settings')
 
 
-class DeleteDocumentView(LoginRequiredMixin, View):
+class DeleteDocumentView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
         # Get the document belonging to the authenticated user
         document = get_object_or_404(Document, id=kwargs['document_id'], user=request.user)

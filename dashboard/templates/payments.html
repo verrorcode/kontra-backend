@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PayPal Payment Test</title>
+    <script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=USD&intent=capture"></script>
+</head>
+<body>
+    <h1>PayPal Payment Test</h1>
+
+    <!-- One-Time Payment Form -->
+    <h2>One-Time Payment (Recharge Credits)</h2>
+    <form id="one-time-payment-form">
+        <label for="one-time-amount">Amount (USD):</label>
+        <input type="number" id="one-time-amount" name="one-time-amount" step="0.01" required>
+        <button type="button" id="create-one-time-payment">Create One-Time Payment</button>
+    </form>
+
+    <div id="one-time-paypal-button-container"></div>
+
+    <!-- Subscription Payment Form -->
+    <h2>Subscription Payment (Monthly or Yearly Plan)</h2>
+    <form id="subscription-payment-form">
+        <label for="subscription-type">Select Subscription:</label>
+        <select id="subscription-type">
+            <option value="monthly">Monthly Plan - $10</option>
+            <option value="yearly">Yearly Plan - $100</option>
+        </select>
+        <button type="button" id="create-subscription">Create Subscription</button>
+    </form>
+
+    <div id="subscription-paypal-button-container"></div>
+
+    <script>
+        // One-Time Payment Logic
+        document.getElementById('create-one-time-payment').addEventListener('click', function(event) {
+            event.preventDefault(); // Prevents default form behavior
+            const amount = document.getElementById('one-time-amount').value;
+            if (!amount) {
+                alert("Please enter an amount");
+                return;
+            }
+
+            fetch('/payments/create-payment/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ amount: amount })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const orderId = data.order_id;
+                    paypal.Buttons({
+                        createOrder: function(data, actions) {
+                            return actions.order.create({
+                                purchase_units: [{
+                                    amount: {
+                                        value: amount
+                                    }
+                                }]
+                            });
+                        },
+                        onApprove: function(data, actions) {
+                            return actions.order.capture().then(function(details) {
+                                alert("One-time payment successful! Payment ID: " + details.id);
+                                return fetch('/payments/capture-payment/', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({ order_id: orderId })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.status === 'success') {
+                                        alert("Payment Captured! Payment ID: " + data.payment_id);
+                                    } else {
+                                        alert("Payment failed: " + (data.error || "Unknown error"));
+                                    }
+                                });
+                            });
+                        },
+                        onError: function(err) {
+                            console.error('Error:', err);
+                            alert("Payment error: " + err);
+                        }
+                    }).render('#one-time-paypal-button-container');
+                } else {
+                    alert("Failed to create payment: " + (data.error || "Unknown error"));
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        // Subscription Payment Logic
+        document.getElementById('create-subscription').addEventListener('click', function(event) {
+            event.preventDefault(); // Prevents default form behavior
+            const subscriptionType = document.getElementById('subscription-type').value;
+            const amount = subscriptionType === 'monthly' ? 10 : 100;
+            const planType = subscriptionType === 'monthly' ? 'MONTHLY' : 'YEARLY';
+
+            fetch('/payments/create-subscription/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ plan_type: planType, amount: amount })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const subscriptionId = data.subscription_id;
+                    paypal.Buttons({
+                        createSubscription: function(data, actions) {
+                            return actions.subscription.create({
+                                'plan_id': subscriptionId
+                            });
+                        },
+                        onApprove: function(data, actions) {
+                            alert("Subscription created successfully! Subscription ID: " + data.subscriptionID);
+                        },
+                        onError: function(err) {
+                            console.error('Error:', err);
+                            alert("Subscription error: " + err);
+                        }
+                    }).render('#subscription-paypal-button-container');
+                } else {
+                    alert("Failed to create subscription: " + (data.error || "Unknown error"));
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+</html>

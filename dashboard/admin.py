@@ -1,6 +1,6 @@
 from django.contrib import admin
-from .models import UserProfile, Folder, Document, ChatMessage, SaaSPlan, FinanceTransaction
-
+from .models import UserProfile, Folder, Document, ChatMessage, SaaSPlan
+from payments.models import FinanceTransaction
 # Register your models here.
 admin.site.register(UserProfile)
 admin.site.register(Folder)

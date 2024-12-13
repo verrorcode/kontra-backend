@@ -36,9 +36,34 @@ class SaasPlanCredits:
     Standard = 1000000
     Premium = 2500000
 
+class SaasPlanQueries:
+    Free = 20
+    Basic = 30000
+    Standard = 100000
+    Premium = 250000
+
 
 class SaasPlanPricing:
+    # Monthly pricing
     Free = 0
     Basic = 14
     Standard = 21
     Premium = 49
+
+    # Yearly pricing (10x the monthly price)
+    FreeYearly = 0
+    BasicYearly = 14 * 10  # 140
+    StandardYearly = 21 * 10  # 210
+    PremiumYearly = 49 * 10  # 490
+
+class SaasPlanPaypalMontly:
+    Free = 0
+    Basic = "P-5RK10458FE361174NM4PJE6Y"
+    Standard = "P-1K3889856X7361201M4PJF4Q"
+    Premium = "P-11198443KW9867508M4PJFSI"
+
+class SaasPlanPaypalYearly:
+    Free = 0
+    Basic = "P-2BU7114417675874JM4PJGCA"
+    Standard = "P-0GS20913FW4825218M4PJFXQ"
+    Premium = "P-1SG12647MT9903930M4PJFMI"

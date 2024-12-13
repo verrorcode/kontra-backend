@@ -10,7 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 import os
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from daphne.server import Server
 from corsheaders.defaults import default_headers
 from pathlib import Path
@@ -58,7 +58,10 @@ INSTALLED_APPS = [
     'django_extensions',
     'dj_rest_auth',
     'rest_framework_simplejwt',
+    'rest_framework.authtoken',
     'rest_framework',
+    'payments',
+    'sslserver',
 ]
 
 MIDDLEWARE = [
@@ -72,6 +75,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    # 'dashboard.middleware.JWTAuthMiddleware1',
     
 
 ]
@@ -167,26 +171,63 @@ AUTHENTICATION_BACKENDS = (
 
 LOGIN_REDIRECT_URL = '/chat/'
 
-ACCOUNT_LOGOUT_REDIRECT_URL = '/accounts/login/'
+ACCOUNT_LOGOUT_REDIRECT_URL = '/api/auths/login/'
 
+# Social Authentication Settings
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'APP': {
             'client_id': '906774570407-8o7dorrsvrjf24qig42l3th2296fv391.apps.googleusercontent.com',
             'secret': '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',
-            'key': ''
-        }
+            'key': '',
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'offline',
+        },
+        'OAUTH_PKCE_ENABLED': True,
     },
     'facebook': {
         'APP': {
             'client_id': '1503941530537849',
             'secret': 'd7c0cada2bca69910011b20a85ece3bc',
             'key': ''
-        }
+        },
+        'METHOD': 'oauth2',
+        'SCOPE': ['email'],
+        'FIELDS': [
+            'id',
+            'email',
+            'name',
+            'first_name',
+            'last_name',
+            'picture',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        },
+        'VERIFIED_EMAIL': False,
     }
 }
 
+# dj-rest-auth + Allauth Integration for Social Login
 
+
+# SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '906774570407-8o7dorrsvrjf24qig42l3th2296fv391.apps.googleusercontent.com'
+# SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'
+
+# SOCIAL_AUTH_FACEBOOK_KEY = '1503941530537849'
+# SOCIAL_AUTH_FACEBOOK_SECRET = 'd7c0cada2bca69910011b20a85ece3bc'
+
+SOCIALACCOUNT_ADAPTER = 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
+ACCOUNT_AUTHENTICATED_EMAIL = False # Allow email confirmation for social logins
+# SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://localhost:8000/accounts/google/login/callback/'
+# SOCIAL_AUTH_FACEBOOK_OAUTH2_REDIRECT_URI = 'https://localhost:8000/accounts/facebook/login/callback/'
+SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://chatbot-zpj2tk.flutterflow.app/'
+SOCIAL_AUTH_FACEBOOK_OAUTH2_REDIRECT_URI = 'https://chatbot-zpj2tk.flutterflow.app/'
 # Email backend configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  # e.g., 'smtp.gmail.com'
@@ -207,8 +248,11 @@ ACCOUNT_USERNAME_REQUIRED = False
 
 
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
     },
 }
 
@@ -223,25 +267,27 @@ CDN_CUSTOM_DOMAIN_STATIC_IMG = 'https://static.admirian.com/'
 
 
 
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Example for Redis
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # Example for Redis
+# Celery settings
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Redis server URL
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
+# Optional: Limit the number of concurrent workers
+CELERY_WORKER_CONCURRENCY = 4  # Adjust based on server capacity
 
-# Configure worker concurrency
-# CELERY_WORKER_CONCURRENCY = 1000  # Set appropriate concurrency level
+# Optional: Task acknowledgments and retry policies
+CELERY_TASK_ACKS_LATE = True  # Acknowledge task only after completion
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue task if worker is lost
 
-  # Reduce to limit the number of processes
+# Optional: Task time limits to prevent resource exhaustion
+CELERY_TASK_TIME_LIMIT = 300  # Max hard limit for task in seconds
+CELERY_TASK_SOFT_TIME_LIMIT = 180  # Graceful limit in seconds before time-out
 
-# Configure task-related settings
-# CELERY_TASK_ACKS_LATE = True  # Ensure tasks are acknowledged only after completion
-# CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue tasks if worker is lost
+# Optional: Logging level for debugging
+CELERYD_LOG_LEVEL = 'INFO'
 
-# Configure time limits (optional)
-# CELERY_TASK_TIME_LIMIT = 600  # Increase time limit per task
-# CELERY_TASK_SOFT_TIME_LIMIT = 300 
-# CELERY_WORKER_POOL = 'solo'
-# Allow credentials (cookies) to be sent in CORS requests
-# Allow credentials to be shared (for APIs that still need it, e.g., login, refresh tokens)
+# Optional: Define worker pool (use 'solo' for debugging in single-threaded environments)
+CELERY_WORKER_POOL = 'solo'  # Default setting; change to 'solo' for local debugging
+
 CORS_ALLOW_CREDENTIALS = True
 
 # Define allowed origins for CORS
@@ -250,7 +296,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://app.flutterflow.io",
     "https://chatbot-homepage-1m5apq.flutterflow.app",
     "https://ff-debug-service-frontend-pro-ygxkweukma-uc.a.run.app",
-    "http://localhost:8000",   # Local testing
+    "http://localhost:8000", 
+    "https://customwidgethosting.web.app",
+    "https://chatbot-zpj2tk.flutterflow.app", 
+    "http://127.0.0.1:8000",
+  # Local testing
 ]
 
 # Specify headers that can be exposed to the browser
@@ -267,8 +317,9 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-Requested-With',
 ]
 # CSRF settings (if still needed for forms, etc.)
-CSRF_COOKIE_SECURE = True  # True for HTTPS
-CSRF_COOKIE_SAMESITE = 'None'  # Allow cross-origin requests (only if still needed)
+CSRF_COOKIE_SECURE = False 
+CSRF_COOKIE_REQUIRED = False # True for HTTPS
+CSRF_COOKIE_SAMESITE = 'Lax'  # Allow cross-origin requests (only if still needed)
 SESSION_COOKIE_SECURE = True  # Should be True if using HTTPS
 SESSION_COOKIE_SAMESITE = 'None'  # Only if still using session cookies
 SESSION_COOKIE_PATH = '/'  # Standard setting
@@ -277,25 +328,28 @@ SESSION_COOKIE_PATH = '/'  # Standard setting
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
 
+
 # Simple JWT settings
 from datetime import timedelta
-
+PASSWORD_RESET_CONFIRM_URL = 'https://chatbot-zpj2tk.flutterflow.app/Passwordreset/{uid}/{token}/'
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
-
+FLUTTERFLOW_FRONTEND_URL = 'https://chatbot-zpj2tk.flutterflow.app'
 # DJ Rest Auth additional settings
+
 REST_AUTH = {
     'USE_JWT': True,
     'JWT_AUTH_RETURN_EXPIRATION': True,
@@ -303,19 +357,25 @@ REST_AUTH = {
     'SESSION_LOGIN': False,
     'OLD_PASSWORD_FIELD_ENABLED': True,
     'LOGOUT_ON_PASSWORD_CHANGE': False,
+    # 'PASSWORD_RESET_SERIALIZER': 'accounts.serializers.CustomPasswordResetSerializer',
+    'PASSWORD_RESET_CONFIRM_URL': f'{FLUTTERFLOW_FRONTEND_URL}/passwordreset/?uid={{uid}}&token={{token}}',
+    # 'PASSWORD_RESET_USE_SITES_DOMAIN': False, 
     # Add these new settings
     'JWT_AUTH': {
         'JWT_AUTH_RETURN_EXPIRATION': True,
         'JWT_AUTH_REFRESH_TOKEN': True,
     }
 }
+REST_AUTH_SERIALIZERS = {
+    "PASSWORD_RESET_SERIALIZER": "accounts.serializers.CustomPasswordResetSerializer",
+}
 REST_USE_JWT = True
 JWT_AUTH_RETURN_EXPIRATION = True
 REST_SESSION_LOGIN = False
-ACCOUNT_EMAIL_CONFIRMATION_URL = 'http://127.0.0.1:8000/api/auth/registration/verify-email?key={key}'
-DJANGO_REST_AUTH = {
-    'PASSWORD_RESET_CONFIRM_URL': 'password-reset-confirm/{uid}/{token}/',
-}
+# ACCOUNT_EMAIL_CONFIRMATION_URL = 'http://127.0.0.1:8000/api/auth/registration/verify-email?key={key}'
+
+
+
 LOGOUT_ON_PASSWORD_CHANGE = False
 
 LOGGING = {
@@ -333,3 +393,24 @@ LOGGING = {
         },
     },
 }
+
+PAYPAL_CLIENT_ID = 'AX21Ua2V18L5CaRHRkWWw6XkH4P5ogsR8wJYV5Vkc51gCkoX9lgCXBUHzECnXKigWC2wrzdccdJv_ME-'
+PAYPAL_CLIENT_SECRET = 'EOTJxFS0ojMt9SdmaXW73xgDjLWmDzpqpBfqfrWjuh-rK0su4uUAudwES3z5rBso20u7T11j-saGhwei'
+PAYPAL_MODE = 'sandbox'
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://vaibhav123.a.pinggy.link","http://127.0.0.1:8000","https://chatbot-zpj2tk.flutterflow.app"
+    # add other trusted origins here if needed
+]
+
+ACCOUNT_CONFIRM_EMAIL_ON_GET = True
+ACCOUNT_EMAIL_CONFIRMATION_TEMPLATE = 'dashboard/templates/email_confirm.html'
+
+FRONTEND_URL = 'https://chatbot-zpj2tk.flutterflow.app'
+
+
+
+SOCIALACCOUNT_EMAIL_VERIFICATION = 'none' 
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SITE_DOMAIN = 'https://chatbot-zpj2tk.flutterflow.app'
+ACCOUNT_PASSWORD_RESET_CONFIRM_URL = 'passwordreset/?uid={uid}&token={token}'

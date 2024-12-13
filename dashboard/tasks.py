@@ -6,10 +6,10 @@ import io
 import requests
 import os
 
-@shared_task
-def process_document_task(file_key, user_id, document_id, cloudflare_url):
-    from celery.contrib import rdb
-    rdb.set_trace()
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def process_document_task(self,file_key, user_id, document_id, cloudflare_url):
+    
     try:
         response = requests.get(cloudflare_url)
         if response.status_code == 200:
@@ -31,7 +31,7 @@ def process_document_task(file_key, user_id, document_id, cloudflare_url):
             document.save()
     except Exception as e:
         print(f"Error processing document: {str(e)}")
-
+        self.retry(exc=e)
 
 @shared_task
 def delete_embeddings_task(file_key,user_id):
