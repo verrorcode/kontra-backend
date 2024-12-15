@@ -101,4 +101,4 @@ docs/
 *.sqlite3 
 # Ignore PDF documents if not needed
 documents/*.pdf
-*.pack
+*.packchroma_db/chroma.sqlite3
